@@ -1,5 +1,6 @@
 # touch-me-arduino
 This project contains the Arduino files for an RFID based set matching game.
+
 The game assumes 3 objects:
 1. RFID tags, each encoded with a "Power" and capable of carrying a "Mission".
    Power means a value to which a field changes when the RFID is presented.
@@ -11,6 +12,9 @@ The game assumes 3 objects:
    this enables returning to the Main station to collect the Prize.
    
 The included Arduino files match the above objects
+
 touch-me-arduino-writer - intended for encoding RFID tags with their initial Power
+
 touch-me-arduino-main - the code for the Main station, also sending tag information over ethernet
+
 touch-me-arduino-outpost - code for an Outpost station
