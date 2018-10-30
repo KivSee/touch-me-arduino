@@ -66,7 +66,7 @@ byte state = 0, new_state = 0;
 byte power_mask = 0xFC;
 byte power = 0x03;
 byte mission = 0xFF;
-byte mission_complete = 0;
+//byte mission_complete = 0;
 
 /**
  * Initialize.
@@ -91,7 +91,7 @@ void setup() {
     Serial.println(F("BEWARE: Data will be written to the PICC, in sector #1"));
 
     FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
-    FastLED.setBrightness(4);
+    FastLED.setBrightness(8);
 }
 
 /**
@@ -145,15 +145,16 @@ void loop() {
     }
 
     // set variables according to data and prepare potential new state
+    new_state = 0; // zeroing new_state so we start fresh and not have residuals from last runs
     power_mask = buffer[0];
     power = buffer[1];
     mission = buffer[2];
-    mission_complete = buffer[3];
+    //mission_complete = buffer[3];
     Serial.print(F("Read power mask ")); Serial.print(power_mask < 0x10 ? " 0" : " "); Serial.println(power_mask, HEX);
     Serial.print(F("Read power ")); Serial.print(power < 0x10 ? " 0" : " "); Serial.println(power, HEX);
     Serial.print(F("Read mission ")); Serial.print(mission < 0x10 ? " 0" : " "); Serial.println(mission, HEX);
     //Serial.print(F("Read mission_valid ")); Serial.print(mission_valid < 0x10 ? " 0" : " "); Serial.println(mission_valid, HEX);
-    Serial.print(F("Read mission_complete ")); Serial.print(mission_complete < 0x10 ? " 0" : " "); Serial.println(mission_complete, HEX);
+    //Serial.print(F("Read mission_complete ")); Serial.print(mission_complete < 0x10 ? " 0" : " "); Serial.println(mission_complete, HEX);
     new_state = state & power_mask;
     //Serial.println(new_state, HEX);
     new_state = new_state | power | VALID_STATE;
@@ -169,23 +170,29 @@ void loop() {
     FastLED.show();
 
     // Handle logic cases:
-    // new state achieves mission, write mission complete and then change state to win state
+    // if mission is already pre achieved, apply new_state with win state
+    // if new state achieves mission, write mission complete and then change state to win state
     // new state does not achieve mission, apply new state.
-    if (new_state == mission) {
+    if (mission >= (WIN_STATE | VALID_STATE)) {
+      Serial.println(F("mission PRE accomplished, applying state as new state with win state!"));
+      state = new_state | WIN_STATE;
+    }
+    else if (new_state == mission) {
       Serial.println(F("mission ACCOMPLISHED, writing completion bit!"));
       //copy read block to write block so we only change what we meant
       for (byte i = 0; i < 16; i++) {
         dataBlock[i] = buffer[i];
       }
-      //set data block mission accomplished byte
-      dataBlock[4] = 0x01;
+      //set data block mission byte with mission accomplished bit
+      new_state = new_state | WIN_STATE;
+      dataBlock[2] = new_state;
       write_success = write_and_verify(blockAddr, dataBlock, buffer, size);
       if (!write_success) {
         Serial.println(F("write failed, keeping previous state"));
       }
       else {
         Serial.println(F("write worked, applying new state"));
-        state = new_state | WIN_STATE;
+        state = new_state;
       }
     }
     else {  // mission is not acheived, no need for write, just apply changes
