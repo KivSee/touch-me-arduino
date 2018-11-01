@@ -62,7 +62,16 @@ byte trailerBlock   = 7;
 byte buffer[18];
 byte size = sizeof(buffer);
 bool read_success, write_success, auth_success;
-byte state = 0, new_state = 0;
+
+#define INITIAL_COLOR 0x0
+#define INITIAL_PATTERN 0x3
+#define INITIAL_MOTION 0x3
+
+byte state = INITIAL_COLOR << 0 | INITIAL_PATTERN << 2 | INITIAL_MOTION << 4;
+byte new_state = 0;
+
+unsigned int winTime = 0;
+const int winLengthMs = 5000;
 byte power_mask = 0xFC;
 byte power = 0x03;
 byte mission = 0xFF;
@@ -91,7 +100,16 @@ void setup() {
     Serial.println(F("BEWARE: Data will be written to the PICC, in sector #1"));
 
     FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
-    FastLED.setBrightness(8);
+    FastLED.setBrightness(32);
+
+    state = state | VALID_STATE;
+}
+
+void checkWinStatus() {
+  if(millis() - winTime > winLengthMs)
+  {
+    state = state & ~(WIN_STATE);
+  }
 }
 
 /**
@@ -99,6 +117,8 @@ void setup() {
  */
 void loop() {
     // advance leds first
+    set_leds(state);
+    checkWinStatus();
     FastLED.show();
     FastLED.delay(20);
     
@@ -166,7 +186,7 @@ void loop() {
     //Serial.println();
 
     // shut off leds so there is a visual indication for a successful read
-    FastLED.clear();
+    fill_solid(leds, NUM_LEDS, CHSV(0, 0, 64));
     FastLED.show();
 
     // Handle logic cases:
@@ -176,6 +196,7 @@ void loop() {
     if (mission >= (WIN_STATE | VALID_STATE)) {
       Serial.println(F("mission PRE accomplished, applying state as new state with win state!"));
       state = new_state | WIN_STATE;
+      winTime = millis();
     }
     else if (new_state == mission) {
       Serial.println(F("mission ACCOMPLISHED, writing completion bit!"));
@@ -193,6 +214,7 @@ void loop() {
       else {
         Serial.println(F("write worked, applying new state"));
         state = new_state;
+        winTime = millis();
       }
     }
     else {  // mission is not acheived, no need for write, just apply changes
@@ -226,93 +248,105 @@ void dump_byte_array(byte *buffer, byte bufferSize) {
 }
 
 void set_leds(byte state) {
-  //Serial.println(F("showing leds"));
-  // state all zeros means never set.. consider what to have leds do
-  if (state == 0x00) {
-    for (byte i=0; i < NUM_LEDS; i++) {
-      leds[i] = CRGB::Black;
-    }
-    return;
-  }
+  CHSV ledsCHSV[NUM_LEDS];
   // state over 127 means WIN_STATE was reached, play victory sequence
   if (state > 127) {
-    for (byte i=0; i < NUM_LEDS; i++) {
-      leds[i] = CRGB::Purple;
+    {
+      fill_rainbow(leds, NUM_LEDS, beat8(60), 256 / NUM_LEDS);
+      if(random8() < 64) {
+        leds[random(NUM_LEDS)] = CRGB::White;
+      }
     }
     return;
   }
   // after special cases state can be checked for COLOR, PATTERN and MOTION and set leds accordingly
   switch (state & COLOR_FIELD_MASK) {
     case 0x00 :
-      for (byte i=0; i < NUM_LEDS; i++) {
-        leds[i] = CRGB::Green;
+      fill_solid(ledsCHSV, NUM_LEDS, CHSV(0 * 256 / 4, 255, 255));
+      break;
+    case 0x01:
+      fill_solid(ledsCHSV, NUM_LEDS, CHSV(1 * 256 / 4, 255, 255));
+      break;
+    case 0x02:
+      fill_solid(ledsCHSV, NUM_LEDS, CHSV(2 * 256 / 4, 255, 255));
+      break;
+    case 0x03:
+      fill_solid(ledsCHSV, NUM_LEDS, CHSV(3 * 256 / 4, 255, 255));
+      break;
+  }
+  switch ( (state & MOTION_FIELD_MASK) >> 4) {
+    case 0x00:
+      {
+        // blink
+        uint8_t brightness = beatsin8(30, 64, 255);
+        for(int i=0; i<NUM_LEDS; i++) {
+          ledsCHSV[i].val = brightness;
+        }
       }
       break;
     case 0x01:
-      for (byte i=0; i < NUM_LEDS; i++) {
-        leds[i] = CRGB::Red;
+      {
+        uint8_t snakeHeadLoc = beat8(30) / NUM_LEDS;
+        for (byte i=0; i < NUM_LEDS; i++) {
+          uint8_t distanceFromHead = (i - snakeHeadLoc + NUM_LEDS) % NUM_LEDS;
+          const int snakeLength = 8;
+          uint8_t brightness = distanceFromHead > snakeLength ? 255 : 255 - ((int)distanceFromHead * (256 / snakeLength));
+          ledsCHSV[i].val = brightness;
+        }
       }
       break;
     case 0x02:
-      for (byte i=0; i < NUM_LEDS; i++) {
-        leds[i] = CRGB::Blue;
+      // static
+      break;
+    case 0x03:
+      //flicker
+      {
+        static bool isOn = true;
+        if(random8() < (isOn ? 40 : 24))
+          isOn = !isOn;
+        uint8_t brightness = isOn ? 255 : 0;
+        for(int i=0; i<NUM_LEDS; i++) {
+          ledsCHSV[i].val = brightness;
+        }
+      }
+      break;
+  }
+  switch ((state & PATTERN_FIELD_MASK) >> 2) {
+    case 0x00 :
+      {
+        // Turn off even leds for dotted pattern
+        for (byte i=0; i < NUM_LEDS/2; i++) {
+          ledsCHSV[i*2].val = 0;
+        }
+      }
+      break;
+    case 0x01:
+      {
+        // Turn off first half
+        for (byte i=0; i < NUM_LEDS/2; i++) {
+          ledsCHSV[i].val = 0;
+        }
+      }
+      break;
+    case 0x02:
+      {
+         // full
       }
       break;
     case 0x03:
-      for (byte i=0; i < NUM_LEDS; i++) {
-        leds[i] = CRGB::Yellow;
+      {
+        // Turn off quarters
+        for (byte i=0; i < NUM_LEDS/4; i++) {
+          ledsCHSV[i].val = 0;
+          ledsCHSV[NUM_LEDS/2 + i].val = 0;
+        }
       }
       break;
   }
-  switch (state & PATTERN_FIELD_MASK) {
-    case 0x00 :
-      // Turn off even leds for dotted pattern
-      for (byte i=0; i < NUM_LEDS/2; i++) {
-        leds[i*2] = CRGB::Black;
-      }
-      break;
-    case 0x04:
-      // Turn off first half
-      for (byte i=0; i < NUM_LEDS/2; i++) {
-        leds[i] = CRGB::Black;
-      }
-      break;
-    case 0x0C:
-      // Turn off other half
-      for (byte i=0; i < NUM_LEDS/2; i++) {
-        leds[NUM_LEDS/2 + i] = CRGB::Black;
-      }
-      break;
-    case 0x0F:
-      // Turn off quarters
-      for (byte i=0; i < NUM_LEDS/4; i++) {
-        leds[i] = CRGB::Black;
-        leds[NUM_LEDS/2 + i] = CRGB::Black;
-      }
-      break;
+  
+  for(int i=0; i<NUM_LEDS; i++) {
+    leds[i] = (CRGB)(ledsCHSV[i]);
   }
-  //switch (state & MOTION_FIELD_MASK) {
-  //  case 0x00 :
-  //    for (byte i=0; i < NUM_LEDS; i++) {
-  //      leds[i] = CRGB::Green;
-  //    }
-  //    break;
-  //  case 0x10:
-  //    for (byte i=0; i < NUM_LEDS; i++) {
-  //      leds[i] = CRGB::Red;
-  //    }
-  //    break;
-  //  case 0x20:
-  //    for (byte i=0; i < NUM_LEDS; i++) {
-  //      leds[i] = CRGB::Blue;
-  //    }
-  //    break;
-  //  case 0x30:
-  //    for (byte i=0; i < NUM_LEDS; i++) {
-  //      leds[i] = CRGB::Yellow;
-  //    }
-  //    break;
-  //}
 }
 
 bool authenticate(byte trailerBlock, MFRC522::MIFARE_Key key) {
