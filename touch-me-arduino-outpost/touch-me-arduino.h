@@ -15,8 +15,18 @@ void dump_byte_array(byte *buffer, byte bufferSize) {
     }
 }
 
-void set_leds(byte state) {
+void set_leds(byte state, LedsState master_state ) {
   CHSV ledsCHSV[NUM_LEDS];
+  if (master_state == Off) {
+    FastLED.clear();
+    return;
+  }
+  if (master_state == Pattern) {
+    fadeToBlackBy( leds, NUM_LEDS, 10);
+    int pos = random16(NUM_LEDS);
+    leds[pos] += CHSV( random8(128), 200, 255);
+    return;
+  }
   // state over 127 means WIN_STATE was reached, play victory sequence
   if (state > 127) {
     {
@@ -27,7 +37,7 @@ void set_leds(byte state) {
     }
     return;
   }
-  // after special cases state can be checked for COLOR, PATTERN and MOTION and set leds accordingly
+  // after special cases state can be checked for COLOR, PATTERN and NUMBER and set leds accordingly
   switch (state & COLOR_FIELD_MASK) {
     case 0x00 :
       fill_solid(ledsCHSV, NUM_LEDS, CHSV(0 * 256 / 4, 255, 255));
@@ -54,6 +64,8 @@ void set_leds(byte state) {
 //      break;
 //    case 0x01:
 //      {
+
+
         uint8_t snakeHeadLoc = beat8(30) / RING_LEDS;
         for (byte i=0; i < RING_LEDS; i++) {
           uint8_t distanceFromHead = (i - snakeHeadLoc + RING_LEDS) % RING_LEDS;
@@ -63,6 +75,8 @@ void set_leds(byte state) {
             ledsCHSV[i+(j*RING_LEDS)].val = brightness;
           }
         }
+
+
 //      }
 //      break;
 //    case 0x02:
@@ -81,6 +95,8 @@ void set_leds(byte state) {
 //      }
 //      break;
 //  }
+
+
   switch ((state & PATTERN_FIELD_MASK) >> 2) {
     case 0x00 :
       {
@@ -119,7 +135,7 @@ void set_leds(byte state) {
   }
   // Turn off rings according to number field
   byte rings = (state & NUMBER_FIELD_MASK) >> 4;
-  for (byte j=4; j > rings; j--) {
+  for (byte j=3; j > rings; j--) {
     for (byte i=0; i < RING_LEDS; i++) {
       ledsCHSV[i+(j*RING_LEDS)].val = 0;
     }

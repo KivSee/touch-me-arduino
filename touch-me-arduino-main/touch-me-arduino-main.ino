@@ -32,7 +32,9 @@ IPAddress TCPserverIp(10, 0, 0, 29);
 
 unsigned int localPort = 8888;      // local port to listen on
 
-#define NUM_LEDS 64
+#define RING_LEDS 16
+#define RINGS     4
+#define NUM_LEDS (RING_LEDS*RINGS)
 #define DATA_PIN 4
 
 // Define the array of leds
@@ -44,7 +46,7 @@ enum LedsState { Off, Pattern, Mission };
 #define VALID_STATE        0x40
 #define COLOR_FIELD_MASK   0x03
 #define PATTERN_FIELD_MASK 0x0C
-#define MOTION_FIELD_MASK  0x30
+#define NUMBER_FIELD_MASK  0x30
 
 #define NO_MSG 0
 #define TAG_INFO_MSG 1
@@ -78,14 +80,14 @@ byte buffer[18];
 byte size = sizeof(buffer);
 bool read_success, write_success, auth_success;
 
-#define INITIAL_COLOR 0x0
-#define INITIAL_PATTERN 0x3
-#define INITIAL_MOTION 0x3
+#define INITIAL_COLOR 0x2
+#define INITIAL_PATTERN 0x2
+#define INITIAL_NUMBER 0x3
 
-byte state = INITIAL_COLOR << 0 | INITIAL_PATTERN << 2 | INITIAL_MOTION << 4;
+byte state = INITIAL_COLOR << 0 | INITIAL_PATTERN << 2 | INITIAL_NUMBER << 4;
 LedsState master_state = Pattern;
 byte message_type = NO_MSG;
-// unsigned int winTime = 0;
+// unsigned long winTime = 0;
 const int winLengthMs = 5000;
 byte power_mask = 0xFC;
 byte power = 0x03;
@@ -180,7 +182,6 @@ void loop() {
     for (int i = 0; i < mfrc522.uid.size; i++) {  // for size of uid.size write uid.uidByte to readCard
       readCard[i] = mfrc522.uid.uidByte[i];
       Serial.print(readCard[i], HEX);
-      
     }
     Serial.println();
     

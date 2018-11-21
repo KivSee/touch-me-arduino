@@ -26,11 +26,13 @@
 
 #define RING_LEDS 16
 #define RINGS     4
-#define NUM_LEDS RING_LEDS*RINGS
+#define NUM_LEDS (RING_LEDS*RINGS)
 #define DATA_PIN 4
 
 // Define the array of leds
 CRGB leds[NUM_LEDS];
+
+enum LedsState { Off, Pattern, Mission };
 
 #define WIN_STATE          0x80
 #define VALID_STATE        0x40
@@ -63,6 +65,7 @@ bool read_success, write_success, auth_success;
 #define INITIAL_NUMBER 0x3
 
 byte state = INITIAL_COLOR << 0 | INITIAL_PATTERN << 2 | INITIAL_NUMBER << 4;
+LedsState master_state = Mission;
 byte new_state = 0;
 
 unsigned long winTime = 0;
@@ -89,12 +92,6 @@ void setup() {
         key.keyByte[i] = 0xFF;
     }
 
-    //Serial.println(F("Scan a MIFARE Classic PICC to demonstrate read and write."));
-    //Serial.print(F("Using key (for A and B):"));
-    //dump_byte_array(key.keyByte, MFRC522::MF_KEY_SIZE);
-    //Serial.println();
-
-    //Serial.println(F("BEWARE: Data will be written to the PICC, in sector #1"));
 
     FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
     FastLED.setBrightness(32);
@@ -107,13 +104,14 @@ void setup() {
  */
 void loop() {
     // advance leds first
-    set_leds(state);
+    set_leds(state, master_state);
     checkWinStatus();
     FastLED.show();
     FastLED.delay(20);
     
     PICC_version = 0;
     PICC_version = mfrc522.PCD_ReadRegister(MFRC522::VersionReg);
+    // START RFID HANDLING
     // Look for new cards
     if ( ! mfrc522.PICC_IsNewCardPresent())
         return;
@@ -121,15 +119,15 @@ void loop() {
     // Select one of the cards
     if ( ! mfrc522.PICC_ReadCardSerial())
         return;
+    // get card uid
+    Serial.print("found tag with ID: ");
     for (int i = 0; i < mfrc522.uid.size; i++) {  // for size of uid.size write uid.uidByte to readCard
       readCard[i] = mfrc522.uid.uidByte[i];
       Serial.print(readCard[i], HEX);
     }
-
-    // Show some details of the PICC (that is: the tag/card)
-    Serial.print(F("Card UID:"));
-    dump_byte_array(mfrc522.uid.uidByte, mfrc522.uid.size);
     Serial.println();
+    
+    // get PICC card type
     Serial.print(F("PICC type: "));
     MFRC522::PICC_Type piccType = mfrc522.PICC_GetType(mfrc522.uid.sak);
     Serial.println(mfrc522.PICC_GetTypeName(piccType));
@@ -227,10 +225,10 @@ void loop() {
     }
     
     delay(100);
-    set_leds(state);
+    set_leds(state, master_state);
     Serial.print(F("current state is ")); Serial.print(state < 0x10 ? " 0" : " "); Serial.println(state, HEX);
 
-    // Dump the sector data
+    // Dump the sector data, good for debug
     //Serial.println(F("Current data in sector:"));
     //mfrc522.PICC_DumpMifareClassicSectorToSerial(&(mfrc522.uid), &key, sector);
     //Serial.println();
