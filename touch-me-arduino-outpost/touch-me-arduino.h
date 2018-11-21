@@ -42,18 +42,18 @@ void set_leds(byte state) {
       fill_solid(ledsCHSV, NUM_LEDS, CHSV(3 * 256 / 4, 255, 255));
       break;
   }
-  switch ( (state & MOTION_FIELD_MASK) >> 4) {
-    case 0x00:
-      {
-        // blink
-        uint8_t brightness = beatsin8(30, 64, 255);
-        for(int i=0; i<NUM_LEDS; i++) {
-          ledsCHSV[i].val = brightness;
-        }
-      }
-      break;
-    case 0x01:
-      {
+//  switch ( (state & MOTION_FIELD_MASK) >> 4) {
+//    case 0x00:
+//      {
+//        // blink
+//        uint8_t brightness = beatsin8(30, 64, 255);
+//        for(int i=0; i<NUM_LEDS; i++) {
+//          ledsCHSV[i].val = brightness;
+//        }
+//      }
+//      break;
+//    case 0x01:
+//      {
         uint8_t snakeHeadLoc = beat8(30) / RING_LEDS;
         for (byte i=0; i < RING_LEDS; i++) {
           uint8_t distanceFromHead = (i - snakeHeadLoc + RING_LEDS) % RING_LEDS;
@@ -63,24 +63,24 @@ void set_leds(byte state) {
             ledsCHSV[i+(j*RING_LEDS)].val = brightness;
           }
         }
-      }
-      break;
-    case 0x02:
-      // static
-      break;
-    case 0x03:
-      //flicker
-      {
-        static bool isOn = true;
-        if(random8() < (isOn ? 40 : 24))
-          isOn = !isOn;
-        uint8_t brightness = isOn ? 255 : 0;
-        for(int i=0; i<NUM_LEDS; i++) {
-          ledsCHSV[i].val = brightness;
-        }
-      }
-      break;
-  }
+//      }
+//      break;
+//    case 0x02:
+//      // static
+//      break;
+//    case 0x03:
+//      //flicker
+//      {
+//        static bool isOn = true;
+//        if(random8() < (isOn ? 40 : 24))
+//          isOn = !isOn;
+//        uint8_t brightness = isOn ? 255 : 0;
+//        for(int i=0; i<NUM_LEDS; i++) {
+//          ledsCHSV[i].val = brightness;
+//        }
+//      }
+//      break;
+//  }
   switch ((state & PATTERN_FIELD_MASK) >> 2) {
     case 0x00 :
       {
@@ -117,8 +117,15 @@ void set_leds(byte state) {
       }
       break;
   }
+  // Turn off rings according to number field
+  byte rings = (state & NUMBER_FIELD_MASK) >> 4;
+  for (byte j=4; j > rings; j--) {
+    for (byte i=0; i < RING_LEDS; i++) {
+      ledsCHSV[i+(j*RING_LEDS)].val = 0;
+    }
+  }
   
-  for(int i=0; i<NUM_LEDS; i++) {
+  for(byte i=0; i<NUM_LEDS; i++) {
     leds[i] = (CRGB)(ledsCHSV[i]);
   }
 }

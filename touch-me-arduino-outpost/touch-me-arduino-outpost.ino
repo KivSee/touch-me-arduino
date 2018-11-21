@@ -36,7 +36,7 @@ CRGB leds[NUM_LEDS];
 #define VALID_STATE        0x40
 #define COLOR_FIELD_MASK   0x03
 #define PATTERN_FIELD_MASK 0x0C
-#define MOTION_FIELD_MASK  0x30
+#define NUMBER_FIELD_MASK  0x30
 
 #define RST_PIN         9           // Configurable, see typical pin layout above
 #define SS_PIN          10          // Configurable, see typical pin layout above
@@ -58,11 +58,11 @@ byte buffer[18];
 byte size = sizeof(buffer);
 bool read_success, write_success, auth_success;
 
-#define INITIAL_COLOR 0x0
-#define INITIAL_PATTERN 0x1
-#define INITIAL_MOTION 0x1
+#define INITIAL_COLOR 0x2
+#define INITIAL_PATTERN 0x2
+#define INITIAL_NUMBER 0x3
 
-byte state = INITIAL_COLOR << 0 | INITIAL_PATTERN << 2 | INITIAL_MOTION << 4;
+byte state = INITIAL_COLOR << 0 | INITIAL_PATTERN << 2 | INITIAL_NUMBER << 4;
 byte new_state = 0;
 
 unsigned long winTime = 0;
