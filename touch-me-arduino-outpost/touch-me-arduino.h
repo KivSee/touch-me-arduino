@@ -54,12 +54,14 @@ void set_leds(byte state) {
       break;
     case 0x01:
       {
-        uint8_t snakeHeadLoc = beat8(30) / NUM_LEDS;
-        for (byte i=0; i < NUM_LEDS; i++) {
-          uint8_t distanceFromHead = (i - snakeHeadLoc + NUM_LEDS) % NUM_LEDS;
+        uint8_t snakeHeadLoc = beat8(30) / RING_LEDS;
+        for (byte i=0; i < RING_LEDS; i++) {
+          uint8_t distanceFromHead = (i - snakeHeadLoc + RING_LEDS) % RING_LEDS;
           const int snakeLength = 8;
           uint8_t brightness = distanceFromHead > snakeLength ? 255 : 255 - ((int)distanceFromHead * (256 / snakeLength));
-          ledsCHSV[i].val = brightness;
+          for (byte j=0; j < RINGS; j++) {
+            ledsCHSV[i+(j*RING_LEDS)].val = brightness;
+          }
         }
       }
       break;
@@ -91,8 +93,10 @@ void set_leds(byte state) {
     case 0x01:
       {
         // Turn off first half
-        for (byte i=0; i < NUM_LEDS/2; i++) {
-          ledsCHSV[i].val = 0;
+        for (byte i=0; i < RING_LEDS/2; i++) {
+          for (byte j=0; j < RINGS; j++) {
+            ledsCHSV[i+(j*RING_LEDS)].val = 0;
+          }
         }
       }
       break;
@@ -104,9 +108,11 @@ void set_leds(byte state) {
     case 0x03:
       {
         // Turn off quarters
-        for (byte i=0; i < NUM_LEDS/4; i++) {
-          ledsCHSV[i].val = 0;
-          ledsCHSV[NUM_LEDS/2 + i].val = 0;
+        for (byte j=0; j < RINGS; j++) {
+          for (byte i=0; i < RING_LEDS/4; i++) {
+            ledsCHSV[i+(j*RING_LEDS)].val = 0;
+            ledsCHSV[RING_LEDS/2 + i + (j*RING_LEDS)].val = 0;
+          }
         }
       }
       break;
