@@ -4,22 +4,18 @@ class RFIDServerComm {
 
   public:
 
-  RFIDServerComm(const IPAddress &serverIp) : ipAddress(serverIp) {
-    
-  }
-  
-  byte handle_socket() {
+  byte handle_socket(IPAddress ipAddr) {
 
-    bool isConnected = tryToConnect();
+    bool isConnected = tryToConnect(ipAddr);
     if(!isConnected)
       return NO_MSG;
       
     return readFromSocket();
   }
   
-  void handle_socket_heartbeat() {
+  void handle_socket_heartbeat(IPAddress ipAddr) {
 
-    bool isConnected = tryToConnect();
+    bool isConnected = tryToConnect(ipAddr);
     if(!isConnected)
       return;
       
@@ -28,9 +24,9 @@ class RFIDServerComm {
     checkHeartBeat();
   }
 
-  void handle_socket_tag() {
+  void handle_socket_tag(IPAddress ipAddr) {
 
-    bool isConnected = tryToConnect();
+    bool isConnected = tryToConnect(ipAddr);
     if(!isConnected)
       return;
 
@@ -41,9 +37,9 @@ class RFIDServerComm {
     }
   }
 
-  void handle_socket_write_status(byte writeStatus) {
+  void handle_socket_write_status(IPAddress ipAddr, byte writeStatus) {
 
-    bool isConnected = tryToConnect();
+    bool isConnected = tryToConnect(ipAddr);
     if(!isConnected)
       return;
 
@@ -52,13 +48,13 @@ class RFIDServerComm {
   
   private:
 
-  bool tryToConnect() {
+  bool tryToConnect(IPAddress ipAddr) {
     if(client.connected()) {
       return true;
     }
 
     client.stop();
-    if (client.connect(ipAddress, 5007)) {
+    if (client.connect(ipAddr, 5007)) {
       Serial.println("successfully connected to the RFID server");
       lastReadTime = millis();
       return true;
@@ -78,7 +74,7 @@ class RFIDServerComm {
   }
 
   void sendTagInfo() {
-    Serial.println("TCP socket connected - sending tag info to server");
+    Serial.println("sending tag info to server");
     byte buf[MSG_LENGTH];
     buf[0] = TAG_INFO_MSG;
     for(int i=1; i<5; i++)
@@ -90,7 +86,7 @@ class RFIDServerComm {
   }
 
   void sendWriteStatus(byte writeStatus) {
-    Serial.println("TCP socket connected - sending write status to server");
+    Serial.println("sending write status to server");
     byte buf[MSG_LENGTH];
     buf[0] = WRITE_STATUS_MSG;
     buf[1] = writeStatus;
@@ -142,7 +138,6 @@ class RFIDServerComm {
 
   private:
     const int MSG_LENGTH = 8;
-    const IPAddress ipAddress;
     EthernetClient client;
     unsigned long lastReadTime = 0;
     const unsigned long HB_TIMEOUT_MILLIS = 3000;

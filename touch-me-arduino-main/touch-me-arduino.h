@@ -229,7 +229,7 @@ bool write_and_verify(byte blockAddr, byte dataBlock[], byte buffer[], byte size
         return true;
     } else {
         Serial.println(F("Failure, no match :-("));
-        Serial.println(F("  perhaps the write didn't work properly..."));
+        //Serial.println(F("  perhaps the write didn't work properly..."));
         Serial.println();
         return false;
     }

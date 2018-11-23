@@ -24,13 +24,17 @@
 #include <MFRC522.h>
 #include <FastLED.h>
 #include <Ethernet.h>
+#include <EthernetUdp.h>
+#include <ArduinoMDNS.h>
 
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xDE };
 IPAddress localIp(10, 0, 0, 222);
-IPAddress serverIp(255, 255, 255, 255);
-IPAddress TCPserverIp(10, 0, 0, 29);
+IPAddress ipAddr(INADDR_NONE);
+//IPAddress ipAddr(10, 0, 0, 102);  // if we want to go back to static
+const char *serverName = "WhereNowPi";
 
-unsigned int localPort = 8888;      // local port to listen on
+EthernetUDP udp;
+MDNS mdns(udp);
 
 #define RING_LEDS 16
 #define RINGS     4
@@ -87,7 +91,7 @@ bool read_success, write_success, auth_success;
 byte state = INITIAL_COLOR << 0 | INITIAL_PATTERN << 2 | INITIAL_NUMBER << 4;
 LedsState master_state = Pattern;
 byte message_type = NO_MSG;
-// unsigned long winTime = 0;
+unsigned long winTime = 0;
 const int winLengthMs = 5000;
 byte power_mask = 0xFC;
 byte power = 0x03;
@@ -101,13 +105,15 @@ unsigned int readCard[4];
 #include "RFIDServerComm.h"
 #include "touch-me-arduino.h"
 
+void nameFound(const char* name, IPAddress ip);
+
 void setup() {
     Serial.begin(9600); // Initialize serial communications with the PC
     while (!Serial);    // Do nothing if no serial port is opened (added for Arduinos based on ATMEGA32U4)
     SPI.begin();        // Init SPI bus
     mfrc522.PCD_Init(); // Init MFRC522 card
     mfrc522.PCD_DumpVersionToSerial();	// Show details of PCD - MFRC522 Card Reader details
-    Serial.println(F("Scan PICC to see UID, SAK, type, and data blocks..."));
+    // Serial.println(F("Scan PICC to see UID, SAK, type, and data blocks..."));
     // Prepare the key (used both as key A and as key B)
     // using FFFFFFFFFFFFh which is the default at chip delivery from the factory
     for (byte i = 0; i < 6; i++) {
@@ -115,45 +121,51 @@ void setup() {
     }
 
     Ethernet.begin(mac, localIp);
+    mdns.begin(Ethernet.localIP(), "arduino");
+    mdns.setNameResolvedCallback(nameFound);
+
     FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
     FastLED.setBrightness(32);
 
     state = state | VALID_STATE;
 }
 
-RFIDServerComm rfidServerComm(TCPserverIp);
-
+RFIDServerComm rfidServerComm;
 
 /**
  * Main loop.
  */
 void loop() {
+    if (!mdns.isResolvingName()) {
+      //Serial.print("Resolving '");
+      //Serial.print(serverName);
+      //Serial.println("' via Multicast DNS (Bonjour)...");
+      mdns.resolveName(serverName, 5000);
+    }
+    mdns.run();
+
     // advance leds first
-//    if (master_state == Off) {
-//      Serial.println("Off");
-//    }
-//    else if (master_state == Pattern) {
-//      Serial.println("Pattern");
-//    }
-//    else {
-//      Serial.println("Mission");
-//    }
     set_leds(state, master_state);
-    //checkWinStatus();
     FastLED.show();
     FastLED.delay(20);
 
     // read the RFID reader version to send over the heartbeat as data
     PICC_version = 0;
     PICC_version = mfrc522.PCD_ReadRegister(MFRC522::VersionReg);
+
+    if (ipAddr == INADDR_NONE) {
+      //Serial.println("no ip set yet");
+      return;
+    }
+    
     // check if its heartbeat time
     if ((millis() - heartbeat_time) > 1000) {
-      rfidServerComm.handle_socket_heartbeat();
+      rfidServerComm.handle_socket_heartbeat(ipAddr);
       heartbeat_time = millis();
     }
 
     // check for show leds messages
-    message_type = rfidServerComm.handle_socket();
+    message_type = rfidServerComm.handle_socket(ipAddr);
     if (message_type == SHOW_LEDS_MSG) {
       if (state) {
         master_state = Pattern;
@@ -178,7 +190,7 @@ void loop() {
     //	mfrc522.PICC_DumpToSerial(&(mfrc522.uid));
 
     // get card uid
-    Serial.print("found tag with ID: ");
+    Serial.print("found tag ID: ");
     for (int i = 0; i < mfrc522.uid.size; i++) {  // for size of uid.size write uid.uidByte to readCard
       readCard[i] = mfrc522.uid.uidByte[i];
       Serial.print(readCard[i], HEX);
@@ -194,21 +206,21 @@ void loop() {
     if (    piccType != MFRC522::PICC_TYPE_MIFARE_MINI
         &&  piccType != MFRC522::PICC_TYPE_MIFARE_1K
         &&  piccType != MFRC522::PICC_TYPE_MIFARE_4K) {
-        Serial.println(F("This sample only works with MIFARE Classic cards."));
+        Serial.println(F("Not a MIFARE Classic card."));
         return;
     }
 
     // perform authentication to open communication
     auth_success = authenticate(trailerBlock, key);
     if (!auth_success) {
-      Serial.println(F("Authentication failed"));
+      //Serial.println(F("Authentication failed"));
       return;
     }
 
     // read the tag to get coded information
     read_success = read_block(blockAddr, buffer, size);
     if (!read_success) {
-      Serial.println(F("Initial read failed, closing connection"));
+      //Serial.println(F("Initial read failed, closing connection"));
       // Halt PICC
       mfrc522.PICC_HaltA();
       // Stop encryption on PCD
@@ -221,12 +233,12 @@ void loop() {
     mission = buffer[2];
 
     // after we read the tag send its info to the server and get a response
-    rfidServerComm.handle_socket_tag();
+    rfidServerComm.handle_socket_tag(ipAddr);
 
     // if response requires it, write to the tag
     if (mission_command) {
       if (mission_command == WIN_NO_ERASE) {
-        Serial.println(F("mission accomplished, play win state without clearing it"));
+        Serial.println(F("mission complete, play win don't clear"));
         master_state = Mission;
         state = WIN_STATE;
       }
@@ -243,18 +255,18 @@ void loop() {
         dataBlock[2] = mission;
         write_success = write_and_verify(blockAddr, dataBlock, buffer, size);
   
-        rfidServerComm.handle_socket_write_status(write_success);
+        rfidServerComm.handle_socket_write_status(ipAddr, write_success);
   
         if (write_success) {
           Serial.println(F("write worked"));
           if (mission_command == WIN_AND_ERASE) {
-            Serial.println(F("mission accomplished, play win state"));
+            Serial.println(F("play win"));
             master_state = Mission;
             state = WIN_STATE;
             // winTime = millis();
           }
           else if (mission_command == NEW_MISSION) {
-            Serial.println(F("display new mission to be written to tag"));
+            Serial.println(F("display new mission"));
             master_state = Mission;
             state = mission;
           }
@@ -283,10 +295,14 @@ void loop() {
     // visual indication for a successful tag operation read or write, failed writes dont get here
     fill_solid(leds, NUM_LEDS, CHSV(0, 0, 64));
     FastLED.show();
-    delay(100);
-    
-    //set_leds(state, master_state);
-    //Serial.print(F("current state is ")); Serial.print(state < 0x10 ? " 0" : " "); Serial.println(state, HEX);
-    
-    //delay(1000);
+    delay(200);
+}
+
+
+void nameFound(const char* name, IPAddress ip)
+{
+  ipAddr = ip;
+  if (ip == INADDR_NONE) {
+    Serial.println("mDNS resolve time out.");
+  }
 }

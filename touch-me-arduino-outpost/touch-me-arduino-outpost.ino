@@ -224,7 +224,7 @@ void loop() {
       state = new_state;
     }
     
-    delay(100);
+    delay(200);
     set_leds(state, master_state);
     Serial.print(F("current state is ")); Serial.print(state < 0x10 ? " 0" : " "); Serial.println(state, HEX);
 
