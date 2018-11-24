@@ -32,6 +32,7 @@ IPAddress localIp(10, 0, 0, 222);
 IPAddress ipAddr(INADDR_NONE);
 //IPAddress ipAddr(10, 0, 0, 102);  // if we want to go back to static
 const char *serverName = "WhereNowPi";
+//const char *serverName = "big-skull";
 
 EthernetUDP udp;
 MDNS mdns(udp);
@@ -44,7 +45,7 @@ MDNS mdns(udp);
 // Define the array of leds
 CRGB leds[NUM_LEDS];
 
-enum LedsState { Off, Pattern, Mission };
+enum LedsState { Off=0, Pattern=1, Mission=2 };
 
 #define WIN_STATE          0x80
 #define VALID_STATE        0x40
@@ -166,15 +167,10 @@ void loop() {
 
     // check for show leds messages
     message_type = rfidServerComm.handle_socket(ipAddr);
+    // they change only the master_state
     if (message_type == SHOW_LEDS_MSG) {
-      if (state) {
-        master_state = Pattern;
-        Serial.println("Show leds on");
-      }
-      else {
-        master_state = Off;
-        Serial.println("Show leds off");
-      }
+      Serial.print("master_state is now set to: ");
+      Serial.println(master_state);
     }
 
     // START RFID HANDLING

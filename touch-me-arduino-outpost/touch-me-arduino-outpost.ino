@@ -187,10 +187,6 @@ void loop() {
     //mfrc522.PICC_DumpMifareClassicSectorToSerial(&(mfrc522.uid), &key, sector);
     //Serial.println();
 
-    // visual indication for a successful read
-    fill_solid(leds, NUM_LEDS, CHSV(0, 0, 64));
-    FastLED.show();
-
     // Handle logic cases:
     // if mission is already pre achieved, apply new_state with win state
     // if new state achieves mission, write mission complete and then change state to win state
@@ -212,6 +208,11 @@ void loop() {
       write_success = write_and_verify(blockAddr, dataBlock, buffer, size);
       if (!write_success) {
         Serial.println(F("write failed, keeping previous state"));
+        // Halt PICC
+        mfrc522.PICC_HaltA();
+        // Stop encryption on PCD
+        mfrc522.PCD_StopCrypto1();
+        return;
       }
       else {
         Serial.println(F("write worked, applying new state"));
@@ -223,18 +224,24 @@ void loop() {
       Serial.println(F("mission not achieved, applying new state"));
       state = new_state;
     }
-    
-    delay(200);
-    set_leds(state, master_state);
-    Serial.print(F("current state is ")); Serial.print(state < 0x10 ? " 0" : " "); Serial.println(state, HEX);
 
     // Dump the sector data, good for debug
     //Serial.println(F("Current data in sector:"));
     //mfrc522.PICC_DumpMifareClassicSectorToSerial(&(mfrc522.uid), &key, sector);
     //Serial.println();
 
+    // close the connection with the RFID
     // Halt PICC
     mfrc522.PICC_HaltA();
     // Stop encryption on PCD
     mfrc522.PCD_StopCrypto1();
+
+    // visual indication for a successful operation
+    fill_solid(leds, NUM_LEDS, CHSV(0, 0, 64));
+    FastLED.show();
+       
+    Serial.print(F("current state is ")); Serial.print(state < 0x10 ? " 0" : " "); Serial.println(state, HEX);
+
+    // hold everything in place for some time
+    delay(200);
 }

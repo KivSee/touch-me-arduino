@@ -115,7 +115,7 @@ class RFIDServerComm {
         return TAG_RESPONSE_MSG;
       }
       else if (read_buf[0] == SHOW_LEDS_MSG) {
-        state = read_buf[1];
+        master_state = read_buf[1];
         return SHOW_LEDS_MSG;
       }
       else if (read_buf[0] == HEARTBEAT_MSG) {
